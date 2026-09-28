@@ -5,11 +5,13 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.security.Keys;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.cloud.gateway.filter.GatewayFilterChain;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
+import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 import reactor.test.StepVerifier;
 
@@ -18,6 +20,7 @@ import java.util.Date;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.*;
 
 class JwtAuthenticationFilterTest {
@@ -71,10 +74,10 @@ class JwtAuthenticationFilterTest {
     }
 
     @Test
-    void filter_ValidToken_Passes() {
+    void filter_ValidToken_ExtractsAndForwardsUserContextHeaders() {
         String token = Jwts.builder()
                 .setClaims(Map.of("role", "ADMIN"))
-                .setSubject("admin")
+                .setSubject("admin_user")
                 .setIssuedAt(new Date())
                 .setExpiration(new Date(System.currentTimeMillis() + 60000))
                 .signWith(Keys.hmacShaKeyFor(SECRET.getBytes(StandardCharsets.UTF_8)), SignatureAlgorithm.HS256)
@@ -88,6 +91,11 @@ class JwtAuthenticationFilterTest {
         StepVerifier.create(filter.filter(exchange, chain))
                 .verifyComplete();
 
-        verify(chain, times(1)).filter(exchange);
+        ArgumentCaptor<ServerWebExchange> captor = ArgumentCaptor.forClass(ServerWebExchange.class);
+        verify(chain, times(1)).filter(captor.capture());
+
+        ServerWebExchange capturedExchange = captor.getValue();
+        assertEquals("admin_user", capturedExchange.getRequest().getHeaders().getFirst("X-User-Id"));
+        assertEquals("ADMIN", capturedExchange.getRequest().getHeaders().getFirst("X-User-Role"));
     }
 }

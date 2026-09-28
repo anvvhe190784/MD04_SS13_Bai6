@@ -1,9 +1,9 @@
 # Session 13: Xây dựng hệ thống xác thực Microservices với JWT
 
-Hệ thống bao gồm các dịch vụ:
-- `identity-service`: Quản lý người dùng, băm mật khẩu BCrypt, cấp phát và xác thực JWT.
-- `gateway-service`: API Gateway (Spring Cloud Gateway WebFlux) định tuyến, chặn bắt và kiểm tra tính hợp lệ của JWT, trích xuất và chuyển tiếp User Context.
-- `product-service`: Dịch vụ đích tiếp nhận request và phân quyền dựa trên User Context (`X-User-Role`).
+Hệ thống Microservices hoàn chỉnh bao gồm:
+- `identity-service` (cổng 8080): Quản lý người dùng, băm mật khẩu BCrypt, cấp phát và xác thực JWT.
+- `gateway-service` (cổng 8888): API Gateway (Spring Cloud Gateway WebFlux) định tuyến, chặn bắt và validate JWT, trích xuất Claims và chuyển tiếp User Context.
+- `product-service` (cổng 8081): Dịch vụ đích tiếp nhận request và phân quyền dựa trên User Context (`X-User-Role`).
 
 ---
 
@@ -52,3 +52,18 @@ Hệ thống bao gồm các dịch vụ:
   - Chặn bắt Header `Authorization: Bearer <token>`.
   - Giải mã và kiểm tra tính hợp lệ của JWT (sai chữ ký, hết hạn, thiếu token).
   - Trả về mã lỗi HTTP 401 Unauthorized dưới dạng JSON chuẩn, không gây crash Gateway.
+
+---
+
+## [Bài tập 6] Trích xuất Claims và chuyển tiếp User Context
+- Tại `gateway-service`:
+  - Sau khi validate token thành công, trích xuất `sub` (username) và `role` từ claims.
+  - Mutate request thêm 2 headers tùy chỉnh: `X-User-Id` và `X-User-Role` trước khi forward sang dịch vụ đích.
+- Tại `product-service` (cổng 8081):
+  - Triển khai endpoint `POST /api/products` và `GET /api/products`.
+  - Đọc header `@RequestHeader("X-User-Role")`:
+    - Nếu role là `ADMIN`: Cho phép xử lý -> Trả về HTTP 200 OK.
+    - Nếu role là `USER` hoặc khác: Từ chối truy cập -> Trả về HTTP 403 Forbidden.
+- Kiểm thử luồng phân quyền end-to-end:
+  - Gọi qua Gateway với Token của `USER` -> Nhận HTTP 403 Forbidden.
+  - Gọi qua Gateway với Token của `ADMIN` -> Nhận HTTP 200 OK.

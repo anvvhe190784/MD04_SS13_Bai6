@@ -59,7 +59,7 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
 
         String token = authHeader.substring(7).trim();
 
-        // 3. Parse and validate Token
+        // 3. Parse, validate Token, extract claims and mutate request headers
         try {
             Claims claims = Jwts.parserBuilder()
                     .setSigningKey(getSigningKey())
@@ -67,8 +67,16 @@ public class JwtAuthenticationFilter implements GlobalFilter, Ordered {
                     .parseClaimsJws(token)
                     .getBody();
 
-            exchange.getAttributes().put("claims", claims);
-            return chain.filter(exchange);
+            String username = claims.getSubject();
+            String role = claims.get("role", String.class);
+
+            // Mutate request with User Context headers (X-User-Id, X-User-Role)
+            ServerHttpRequest mutatedRequest = exchange.getRequest().mutate()
+                    .header("X-User-Id", username != null ? username : "")
+                    .header("X-User-Role", role != null ? role : "")
+                    .build();
+
+            return chain.filter(exchange.mutate().request(mutatedRequest).build());
 
         } catch (ExpiredJwtException ex) {
             return onError(exchange, HttpStatus.UNAUTHORIZED, "Token has expired");
